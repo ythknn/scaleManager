@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Scheduler</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        header {
+            background-color: #4e1a65;
+            color: #fff;
+            padding: 1rem;
+            text-align: center;
+        }
+        h1 {
+            margin: 0;
+            font-size: 2rem;
+        }
+        .container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 1rem;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+        select, input[type="number"], input[type="datetime-local"] {
+            width: calc(100% - 1rem);
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        select:focus, input:focus {
+            border-color: #4e1a65;
+            outline: none;
+        }
+        button {
+            background-color: #4e1a65;
+            color: #fff;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-right: 1rem;
+        }
+        button:hover {
+            background-color: #3b1044;
+        }
+        .message {
+            text-align: center;
+            margin: 1rem 0;
+            font-size: 1.2rem;
+            color: #4e1a65;
+        }
+        .button-container {
+            text-align: center;
+        }
+        .jobs-list {
+            margin-top: 2rem;
+        }
+        .jobs-list ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .jobs-list li {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .jobs-list button {
+            background-color: #e74c3c;
+            border: none;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var options = JSON.parse(document.getElementById('options').textContent);
+
+            var appNameSelect = document.getElementById('appName');
+            var profileSelect = document.getElementById('profile');
+            var minReplicasInput = document.getElementById('minReplicas');
+            var maxReplicasInput = document.getElementById('maxReplicas');
+            var viewJobsButton = document.getElementById('viewJobsButton');
+
+            // Populate appName dropdown
+            options.forEach(function (option) {
+                var appOption = document.createElement('option');
+                appOption.value = option.appName;
+                appOption.textContent = option.appName;
+                appNameSelect.appendChild(appOption);
+            });
+
+            // Update profiles based on selected appName
+            appNameSelect.addEventListener('change', function () {
+                var selectedApp = appNameSelect.value;
+                var selectedOption = options.find(option => option.appName === selectedApp);
+
+                // Clear and populate profiles
+                profileSelect.innerHTML = '<option value="" disabled selected>Select Profile</option>';
+                if (selectedOption) {
+                    Object.keys(selectedOption.profiles).forEach(function (profileKey) {
+                        var profileOption = document.createElement('option');
+                        profileOption.value = profileKey;
+                        profileOption.textContent = profileKey;
+                        profileSelect.appendChild(profileOption);
+                    });
+                }
+                // Clear replicas fields
+                minReplicasInput.value = '';
+                maxReplicasInput.value = '';
+            });
+
+            // Update min and max replicas based on selected profile
+            profileSelect.addEventListener('change', function () {
+                var selectedApp = appNameSelect.value;
+                var selectedProfile = profileSelect.value;
+                var selectedOption = options.find(option => option.appName === selectedApp);
+
+                if (selectedOption) {
+                    var profile = selectedOption.profiles[selectedProfile];
+                    if (profile) {
+                        minReplicasInput.value = profile.minReplicas;
+                        maxReplicasInput.value = profile.maxReplicas;
+                    }
+                }
+            });
+
+            // Fetch and display active jobs
+            viewJobsButton.addEventListener('click', function () {
+                fetch('/jobs')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Format jobs data
+                        let jobsListHtml = data.map(job => 
+                            `<li>
+                                ID: ${job.ID}, AppName: ${job.JobParams.AppName}, MinReplicas: ${job.JobParams.MinReplicas}, MaxReplicas: ${job.JobParams.MaxReplicas}, DateTime: ${new Date(job.JobParams.DateTime).toLocaleString()}
+                                <button onclick="cancelJob('${job.ID}')">X</button>
+                            </li>`
+                        ).join('');
+
+                        // Display active jobs in a modal
+                        Swal.fire({
+                            title: 'Active Jobs',
+                            html: `<ul class="jobs-list">${jobsListHtml || 'No active jobs'}</ul>`,
+                            icon: 'info',
+                            width: 1400,
+                            confirmButtonColor: '#4e1a65'
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error fetching jobs:', error);
+                        Swal.fire({
+                            title: 'Error',
+                            text: 'Failed to fetch active jobs',
+                            icon: 'error',
+                            confirmButtonColor: '#4e1a65'
+                        });
+                    });
+            });
+        });
+
+        function cancelJob(jobId) {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "This job will be canceled.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#4e1a65',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, cancel it!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch(`/cancel/${jobId}`, { method: 'POST' })
+                        .then(response => {
+                            if (response.ok) {
+                                Swal.fire({
+                                    title: 'Cancelled',
+                                    text: 'Job has been cancelled successfully.',
+                                    icon: 'success',
+                                    confirmButtonColor: '#4e1a65'
+                                });
+                                // Optionally, you might want to refresh the jobs list here
+                            } else {
+                                Swal.fire({
+                                    title: 'Error',
+                                    text: 'Failed to cancel the job.',
+                                    icon: 'error',
+                                    confirmButtonColor: '#4e1a65'
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error cancelling job:', error);
+                            Swal.fire({
+                                title: 'Error',
+                                text: 'Failed to cancel the job.',
+                                icon: 'error',
+                                confirmButtonColor: '#4e1a65'
+                            });
+                        });
+                }
+            });
+        }
+    </script>
+</head>
+<body>
+    <header>
+        <h1>Job Scheduler</h1>
+    </header>
+    <div class="container">
+        <div id="options" style="display: none;">
+            {{.Options}}
+        </div>
+
+        {{if .Success}}
+        <script>
+            Swal.fire({
+                title: "Job scheduled successfully!",
+                text: "Job will be executed at the given time.",
+                icon: "success",
+                confirmButtonColor: "#4e1a65"
+            });
+        </script>
+        {{end}}
+
+        <h2>Schedule a New Job</h2>
+        <form action="/schedule" method="post">
+            <label for="appName">App Name:</label>
+            <select id="appName" name="appName" required>
+                <option value="" disabled selected>Select App Name</option>
+            </select>
+            <label for="profile">Profile:</label>
+            <select id="profile" name="profile" required>
+                <option value="" disabled selected>Select Profile</option>
+            </select>
+            <label for="minReplicas">Min Replicas:</label>
+            <input type="number" id="minReplicas" name="minReplicas" readonly>
+            <label for="maxReplicas">Max Replicas:</label>
+            <input type="number" id="maxReplicas" name="maxReplicas" readonly>
+            <label for="datetime">Date and Time:</label>
+            <input type="datetime-local" id="datetime" name="datetime" required>
+            <div class="button-container">
+                <button type="submit">Schedule</button>
+                <button type="button" id="viewJobsButton">View Active Jobs</button>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

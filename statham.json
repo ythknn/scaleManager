@@ -1,0 +1,15 @@
+[
+    {
+        "appName": "TeST",
+        "profiles": {
+            "p1": {
+                "minReplicas": 2,
+                "maxReplicas": 5
+            },
+            "p2": {
+                "minReplicas": 5,
+                "maxReplicas": 11
+            }
+        }
+    }
+]
